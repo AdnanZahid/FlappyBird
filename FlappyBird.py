@@ -29,6 +29,7 @@ columns, rows = screen_size[0], screen_size[1];
 
 # Snake constants
 snake_initial_size = 1
+snake_position = (10,screen_size[1]/2)
 
 # Wall constants
 wallWidth = 3
@@ -60,11 +61,10 @@ def drawNode(x,y,grid,screen):
 
     pygame.draw.rect(screen,color,pygame.Rect(x*block_size,y*block_size,block_size,block_size))
 
-def isGameOver(snake_nodes):
+def isGameOver(snake_nodes,grid):
     head = snake_nodes[0]
-    return head.x == 0\
+    return grid[head.x][head.y] == NodeType.wall\
         or head.y == 0\
-        or head.x == columns-1\
         or head.y == rows-1
 
 def advanceSnake(snake_nodes,direction,grid):
@@ -191,23 +191,25 @@ def runGame(death_count,font):
     # Game objects
     directions = [Direction.right,Direction.left,Direction.up,Direction.down]
     direction = directions[randint(0,len(directions)-1)]
-    snake_position = (randint(1, columns-snake_initial_size-1),randint(1, rows-snake_initial_size-1))
     screen = pygame.display.set_mode((screen_size[0]*block_size,
                                       screen_size[1]*block_size))
-
     wallIndex = columns
+    grid = getGrid()
+    snake_nodes = getSnakeNodes(snake_position[0],
+                                snake_position[1],
+                                grid)
 
     # Game loop
-    while not False:
+    while not isGameOver(snake_nodes,grid):
 
         grid = getGrid()
         grid = getWalledGrid(grid,wallIndex)
-        wallIndex -= 1
-        if wallIndex <= 0:
-            wallIndex = columns
         snake_nodes = getSnakeNodes(snake_position[0],
                                     snake_position[1],
                                     grid)
+        wallIndex -= 1
+        if wallIndex <= 0:
+            wallIndex = columns
 
         # Update score
         death_count_label = font.render("Death count: {}".format(death_count), 1, (255,255,0))
@@ -231,7 +233,7 @@ def runGame(death_count,font):
         elif pressed[pygame.K_DOWN] and direction!=Direction.up: direction = Direction.down
 
     death_count += 1
-    runGame(death_count,font,model)
+    runGame(death_count,font)
 
 # data,labels = load_csv("Data.csv",target_column=0,categorical_labels=True,n_classes=3)
 # model = getTrainedModel(data,labels)
