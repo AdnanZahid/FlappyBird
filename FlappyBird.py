@@ -125,18 +125,6 @@ def distanceBetweenSnakeAndFood(snake_nodes,food_position):
 
     return base+perpendicular
 
-def getOrthogonalAngle(snake_nodes,food_position):
-    head = snake_nodes[0]
-
-    food_x,food_y = food_position
-
-    base = food_x - head.x
-    perpendicular = food_y - head.y
-
-    hypotenuse = sqrt(base**2 + perpendicular**2)+0.00001
-
-    return asin(perpendicular/hypotenuse)/(pi/2)
-
 def neuralInputs(snake_nodes,grid,absolute_direction,food_position):
     return (areNeighboringNodesBlocked(*getNeighboringNodes(snake_nodes,absolute_direction,grid)),
     round(getOrthogonalAngle(snake_nodes,food_position),3))
@@ -151,25 +139,6 @@ def getTrainedModel(data, labels):
 
     model.fit(data, labels, n_epoch = 10, shuffle = True)
     return model
-
-def getRelativeDirection(current_direction,next_direction):
-
-    if current_direction == Direction.right:
-        if next_direction == Direction.up: return -1
-        elif next_direction == Direction.right: return 0
-        else:                         return 1
-    elif current_direction == Direction.left:
-        if next_direction == Direction.down: return -1
-        elif next_direction == Direction.left: return 0
-        else:                         return 1
-    elif current_direction == Direction.up:
-        if next_direction == Direction.left: return -1
-        elif next_direction == Direction.up: return 0
-        else:                         return 1
-    else:
-        if next_direction == Direction.right: return -1
-        elif next_direction == Direction.down: return 0
-        else:                         return 1
 
 def getPredictedDirection(snake_nodes,absolute_direction,model,inputs,grid):
     head = snake_nodes[0]
@@ -210,15 +179,6 @@ def getOutputForTraining(target_output,inputs,snake_nodes,relative_direction):
                                      inputs[1],
                                      relative_direction)
 
-def generateFood(grid):
-    food_position = (randint(1, columns-snake_initial_size-1),randint(1, rows-snake_initial_size-1))
-    grid[food_position[0]][food_position[1]] = NodeType.food
-    return food_position
-
-def checkForFoodCollision(snake_nodes,grid):
-    head = snake_nodes[0]
-    return grid[head.x][head.y] == NodeType.food
-
 def getWalledGrid(grid,index):
     for i in range(index - wallWidth,index):
         for j in range(rows):
@@ -248,7 +208,6 @@ def runGame(death_count,font):
         snake_nodes = getSnakeNodes(snake_position[0],
                                     snake_position[1],
                                     grid)
-        food_position = generateFood(grid)
 
         # Update score
         death_count_label = font.render("Death count: {}".format(death_count), 1, (255,255,0))
