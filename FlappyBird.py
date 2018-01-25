@@ -14,27 +14,27 @@ from tflearn.data_utils import load_csv
 class Direction:
     left, right, up, down = range(4)
 class NodeType:
-    empty, snake, food, wall = range(4)
+    empty, flappy_bird, food, wall = range(4)
 
 # Screen constants
 block_size = 10
 screen_size = (50,50)
 screen_color = (0, 0, 0)
 wall_color = (128, 128, 128)
-snake_color = (0, 255, 255)
+flappy_bird_color = (0, 255, 255)
 food_color = (0, 255, 0)
 
 # Grid constants
 columns, rows = screen_size[0], screen_size[1];
 
-# Snake constants
-snake_initial_size = 1
-snake_position = (10,screen_size[1]/2)
+# flappy_bird constants
+flappy_bird_initial_size = 1
+flappy_bird_position = (10,screen_size[1]/2)
 
 # Wall constants
 wallWidth = 3
 
-class SnakeNode:
+class flappyBirdNode:
     def __init__(self,x,y):
         self.x = x
         self.y = y
@@ -44,26 +44,26 @@ def getGrid():
     return grid
 
 def getFlappyBirdNodes(x,y,grid,total_gravitational_force):
-    # Create initial snake
-    snake_nodes = []
-    for i in range(snake_initial_size):
+    # Create initial flappy_bird
+    flappy_bird_nodes = []
+    for i in range(flappy_bird_initial_size):
         y += total_gravitational_force
-        segment = SnakeNode(x+i, y)
-        snake_nodes.append(segment)
-        grid[x+i][y] = NodeType.snake
+        segment = flappyBirdNode(x+i, y)
+        flappy_bird_nodes.append(segment)
+        grid[x+i][y] = NodeType.flappy_bird
 
-    return snake_nodes
+    return flappy_bird_nodes
 
 def drawNode(x,y,grid,screen):
-    if grid[x][y] == NodeType.snake:  color = snake_color
+    if grid[x][y] == NodeType.flappy_bird:  color = flappy_bird_color
     elif grid[x][y] == NodeType.food: color = food_color
     elif grid[x][y] == NodeType.wall: color = wall_color
     else:                             color = screen_color
 
     pygame.draw.rect(screen,color,pygame.Rect(x*block_size,y*block_size,block_size,block_size))
 
-def isGameOver(snake_nodes,grid):
-    head = snake_nodes[0]
+def isGameOver(flappy_bird_nodes,grid):
+    head = flappy_bird_nodes[0]
     return grid[head.x][head.y] == NodeType.wall\
         or head.y == 0\
         or head.y == rows-1
@@ -73,8 +73,8 @@ def drawNodes(grid,screen):
         for y in range(rows):
             drawNode(x,y, grid,screen)
 
-def neuralInputs(snake_nodes,wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y):
-    head = snake_nodes[0]
+def neuralInputs(flappy_bird_nodes,wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y):
+    head = flappy_bird_nodes[0]
 
     wall_boundary_x = abs(head.x - wall_boundary_x)
     top_wall_boundary_y = abs(head.y - top_wall_boundary_y)
@@ -83,27 +83,23 @@ def neuralInputs(snake_nodes,wall_boundary_x,top_wall_boundary_y,bottom_wall_bou
     return wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y
 
 def getTrainedModel(data, labels):
-    network = input_data(shape=[None, 4], name='input')
-    network = fully_connected(network, 25, activation='relu')
-    network = fully_connected(network, 25, activation='relu')
-    network = fully_connected(network, 2, activation='linear')
+    network = input_data(shape=[None, 2], name='input')
+    network = fully_connected(network, 3, activation='linear')
     network = regression(network, optimizer='adam', learning_rate=1e-2, loss='mean_square', name='target')
     model = tflearn.DNN(network)
 
     model.fit(data, labels, n_epoch = 1, shuffle = True)
     return model
 
-def getPredictedDirection(snake_nodes,model,inputs):
-    head = snake_nodes[0]
+def getPredictedDirection(flappy_bird_nodes,model,inputs):
+    head = flappy_bird_nodes[0]
 
     directions = [0,1]
 
     # shuffle(directions)
 
     for direction in directions:
-        prediction = model.predict([[inputs[0],inputs[1],inputs[2],direction]])
-
-        print(prediction)
+        prediction = model.predict([[inputs[0],direction]])
 
         if np.argmax(prediction) == 1:
             break
@@ -112,10 +108,8 @@ def getPredictedDirection(snake_nodes,model,inputs):
 
 def getOutputForTraining(target_output,inputs,direction):
 
-    return "\n{},{},{},{},{}".format(target_output,
+    return "\n{},{},{}".format(target_output,
                                         inputs[0],
-                                        inputs[1],
-                                        inputs[2],
                                         direction)
 
 def getWalledGrid(grid,index):
@@ -135,25 +129,31 @@ def runGame(death_count,font):
                                       screen_size[1]*block_size))
     wallIndex = columns
     grid = getGrid()
-    snake_nodes = getFlappyBirdNodes(snake_position[0],
-                                snake_position[1],
+    flappy_bird_nodes = getFlappyBirdNodes(flappy_bird_position[0],
+                                flappy_bird_position[1],
                                 grid,
                                 total_gravitational_force)
 
     # Game loop
-    while not isGameOver(snake_nodes,grid):
+    while not isGameOver(flappy_bird_nodes,grid):
 
         total_gravitational_force += 1
         grid = getGrid()
-        snake_nodes = getFlappyBirdNodes(snake_position[0],
-                                    snake_position[1],
+
+        previous_distance_between_flappy_bird_and_center = abs(flappy_bird_nodes[0].y - screen_size[1]/2)
+
+        # Move the flappy bird
+        flappy_bird_nodes = getFlappyBirdNodes(flappy_bird_position[0],
+                                    flappy_bird_position[1],
                                     grid,
                                     total_gravitational_force)
-        grid,wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y = getWalledGrid(grid,wallIndex)
-        inputs = neuralInputs(snake_nodes,wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y)
 
-        direction = getPredictedDirection(snake_nodes,model,inputs)
-        # print(direction)
+        current_distance_between_flappy_bird_and_center = abs(flappy_bird_nodes[0].y - screen_size[1]/2)
+
+        grid,wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y = getWalledGrid(grid,wallIndex)
+        inputs = neuralInputs(flappy_bird_nodes,wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y)
+
+        direction = getPredictedDirection(flappy_bird_nodes,model,inputs)
         total_gravitational_force -= (direction * 2)
 
         # Move the wall
@@ -162,11 +162,11 @@ def runGame(death_count,font):
             wallIndex = columns
 
         # If game is over, target output is -1
-        # If snake has moved away from the goal, target output is 0
-        # If snake has moved closer to the goal, target output is 1
-        if isGameOver(snake_nodes,grid): target_output = 0
-        # elif current_distance_between_snake_and_food >= previous_distance_between_snake_and_food:  target_output = 0
-        else:                            target_output = 1
+        # If flappy_bird has moved away from the goal, target output is 0
+        # If flappy_bird has moved closer to the goal, target output is 1
+        if isGameOver(flappy_bird_nodes,grid):                                                                     target_output = -1
+        elif current_distance_between_flappy_bird_and_center >= previous_distance_between_flappy_bird_and_center:  target_output = 0
+        else:                                                                                                      target_output = 1
 
         output = getOutputForTraining(target_output,inputs,direction)
         # file = open("Data.csv","a")
@@ -174,7 +174,7 @@ def runGame(death_count,font):
         # file.close()
 
         # Update score
-        game_stats_label = font.render("Deaths: {}                    Score: {}".format(death_count,score_count), 1, (255,255,0))
+        game_stats_label = font.render("Deaths: {}               Score: {}".format(death_count,score_count), 1, (255,255,0))
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -197,7 +197,7 @@ def runGame(death_count,font):
     death_count += 1
     runGame(death_count,font)
 
-data,labels = load_csv("Data.csv",target_column=0,categorical_labels=True,n_classes=2)
+data,labels = load_csv("Data.csv",target_column=0,categorical_labels=True,n_classes=3)
 model = getTrainedModel(data,labels)
 death_count = 0
 pygame.init()
