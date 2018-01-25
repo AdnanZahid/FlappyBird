@@ -43,10 +43,11 @@ def getGrid():
     grid = [[0 for x in range(columns)] for y in range(rows)]
     return grid
 
-def getSnakeNodes(x,y,grid):
+def getFlappyBirdNodes(x,y,grid,total_gravitational_force):
     # Create initial snake
     snake_nodes = []
     for i in range(snake_initial_size):
+        y += total_gravitational_force
         segment = SnakeNode(x+i, y)
         snake_nodes.append(segment)
         grid[x+i][y] = NodeType.snake
@@ -67,152 +68,113 @@ def isGameOver(snake_nodes,grid):
         or head.y == 0\
         or head.y == rows-1
 
-def advanceSnake(snake_nodes,direction,grid):
-    head = snake_nodes[0]
-    tail = snake_nodes.pop()
-    grid[tail.x][tail.y] = NodeType.empty
-    
-    if direction == Direction.up:
-        tail.x = head.x
-        tail.y = head.y - 1
-    elif direction == Direction.down:
-        tail.x = head.x
-        tail.y = head.y + 1
-    elif direction == Direction.left:
-        tail.x = head.x - 1
-        tail.y = head.y
-    elif direction == Direction.right:
-        tail.x = head.x + 1
-        tail.y = head.y
-
-    snake_nodes.insert(0,tail)
-
-    if grid[tail.x][tail.y] != NodeType.food:
-        grid[tail.x][tail.y] = NodeType.snake
-
-    return snake_nodes
-
 def drawNodes(grid,screen):
     for x in range(columns):
         for y in range(rows):
             drawNode(x,y, grid,screen)
 
-def getNeighboringNodes(snake_nodes,direction,grid): # Left, forward, right nodes of snake
+def neuralInputs(snake_nodes,wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y):
     head = snake_nodes[0]
 
-    if direction == Direction.right:
-        return (grid[head.x][head.y-1],grid[head.x+1][head.y],grid[head.x][head.y+1])
-    elif direction == Direction.left:
-        return (grid[head.x][head.y+1],grid[head.x-1][head.y],grid[head.x][head.y-1])
-    elif direction == Direction.up:
-        return (grid[head.x-1][head.y],grid[head.x][head.y-1],grid[head.x+1][head.y])
-    else:
-        return (grid[head.x+1][head.y],grid[head.x][head.y+1],grid[head.x-1][head.y])
+    wall_boundary_x = abs(head.x - wall_boundary_x)
+    top_wall_boundary_y = abs(head.y - top_wall_boundary_y)
+    bottom_wall_boundary_y = abs(head.y - bottom_wall_boundary_y)
 
-def areNeighboringNodesBlocked(left,forward,right):
-    return (int(left == NodeType.wall),int(forward == NodeType.wall),int(right == NodeType.wall))
-
-def isAnyNeighboringNodesBlocked(left,forward,right):
-    return left == NodeType.wall or forward == NodeType.wall or right == NodeType.wall
-
-def distanceBetweenSnakeAndFood(snake_nodes,food_position):
-    head = snake_nodes[0]
-
-    food_x,food_y = food_position
-
-    base = abs(food_x - head.x)
-    perpendicular = abs(food_y - head.y)
-
-    return base+perpendicular
-
-def neuralInputs(snake_nodes,grid,absolute_direction,food_position):
-    return (areNeighboringNodesBlocked(*getNeighboringNodes(snake_nodes,absolute_direction,grid)),
-    round(getOrthogonalAngle(snake_nodes,food_position),3))
+    return wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y
 
 def getTrainedModel(data, labels):
-    network = input_data(shape=[None, 5], name='input')
+    network = input_data(shape=[None, 4], name='input')
     network = fully_connected(network, 25, activation='relu')
     network = fully_connected(network, 25, activation='relu')
-    network = fully_connected(network, 3, activation='linear')
+    network = fully_connected(network, 2, activation='linear')
     network = regression(network, optimizer='adam', learning_rate=1e-2, loss='mean_square', name='target')
     model = tflearn.DNN(network)
 
-    model.fit(data, labels, n_epoch = 10, shuffle = True)
+    model.fit(data, labels, n_epoch = 1, shuffle = True)
     return model
 
-def getPredictedDirection(snake_nodes,absolute_direction,model,inputs,grid):
+def getPredictedDirection(snake_nodes,model,inputs):
     head = snake_nodes[0]
 
-    relative_directions = [-1,0,1]
+    directions = [0,1]
 
-    shuffle(relative_directions)
+    # shuffle(directions)
 
-    for relative_direction in relative_directions:
-        prediction = model.predict([[inputs[0][0],inputs[0][1],inputs[0][2],inputs[1],relative_direction]])
+    for direction in directions:
+        prediction = model.predict([[inputs[0],inputs[1],inputs[2],direction]])
+
+        print(prediction)
 
         if np.argmax(prediction) == 1:
             break
 
-    if absolute_direction == Direction.right:
-        if relative_direction == -1:  return Direction.up,relative_direction
-        elif relative_direction == 0: return Direction.right,relative_direction
-        else:                         return Direction.down,relative_direction
-    elif absolute_direction == Direction.left:
-        if relative_direction == -1:  return Direction.down,relative_direction
-        elif relative_direction == 0: return Direction.left,relative_direction
-        else:                         return Direction.up,relative_direction
-    elif absolute_direction == Direction.up:
-        if relative_direction == -1:  return Direction.left,relative_direction
-        elif relative_direction == 0: return Direction.up,relative_direction
-        else:                         return Direction.right,relative_direction
-    else:
-        if relative_direction == -1:  return Direction.right,relative_direction
-        elif relative_direction == 0: return Direction.down,relative_direction
-        else:                         return Direction.left,relative_direction
+    return direction
 
-def getOutputForTraining(target_output,inputs,snake_nodes,relative_direction):
+def getOutputForTraining(target_output,inputs,direction):
 
-    return "\n{},{},{},{},{},{}".format(target_output,
-                                     inputs[0][0],
-                                     inputs[0][1],
-                                     inputs[0][2],
-                                     inputs[1],
-                                     relative_direction)
+    return "\n{},{},{},{},{}".format(target_output,
+                                        inputs[0],
+                                        inputs[1],
+                                        inputs[2],
+                                        direction)
 
 def getWalledGrid(grid,index):
     for i in range(index - wallWidth,index):
         for j in range(rows):
-            grid[i][j] = NodeType.wall
+            if j < rows/2-5 or j > rows/2+5:
+                grid[i][j] = NodeType.wall
 
-    return grid
+    return grid,index,rows/2-5,rows/2+5
 
 def runGame(death_count,font):
 
     # Game objects
-    directions = [Direction.right,Direction.left,Direction.up,Direction.down]
-    direction = directions[randint(0,len(directions)-1)]
+    score_count = 0
+    total_gravitational_force = 0
     screen = pygame.display.set_mode((screen_size[0]*block_size,
                                       screen_size[1]*block_size))
     wallIndex = columns
     grid = getGrid()
-    snake_nodes = getSnakeNodes(snake_position[0],
+    snake_nodes = getFlappyBirdNodes(snake_position[0],
                                 snake_position[1],
-                                grid)
+                                grid,
+                                total_gravitational_force)
 
     # Game loop
     while not isGameOver(snake_nodes,grid):
 
+        total_gravitational_force += 1
         grid = getGrid()
-        grid = getWalledGrid(grid,wallIndex)
-        snake_nodes = getSnakeNodes(snake_position[0],
+        snake_nodes = getFlappyBirdNodes(snake_position[0],
                                     snake_position[1],
-                                    grid)
+                                    grid,
+                                    total_gravitational_force)
+        grid,wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y = getWalledGrid(grid,wallIndex)
+        inputs = neuralInputs(snake_nodes,wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y)
+
+        direction = getPredictedDirection(snake_nodes,model,inputs)
+        # print(direction)
+        total_gravitational_force -= (direction * 2)
+
+        # Move the wall
         wallIndex -= 1
         if wallIndex <= 0:
             wallIndex = columns
 
+        # If game is over, target output is -1
+        # If snake has moved away from the goal, target output is 0
+        # If snake has moved closer to the goal, target output is 1
+        if isGameOver(snake_nodes,grid): target_output = 0
+        # elif current_distance_between_snake_and_food >= previous_distance_between_snake_and_food:  target_output = 0
+        else:                            target_output = 1
+
+        output = getOutputForTraining(target_output,inputs,direction)
+        # file = open("Data.csv","a")
+        # file.write(output)
+        # file.close()
+
         # Update score
-        death_count_label = font.render("Death count: {}".format(death_count), 1, (255,255,0))
+        game_stats_label = font.render("Deaths: {}                    Score: {}".format(death_count,score_count), 1, (255,255,0))
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -221,11 +183,11 @@ def runGame(death_count,font):
         # Drawing
         screen.fill(screen_color)
         drawNodes(grid,screen)
-        screen.blit(death_count_label, (0, 0))
+        screen.blit(game_stats_label, (0, 0))
         pygame.display.flip()
 
         # Clock ticking
-        pygame.time.Clock().tick(60)
+        pygame.time.Clock().tick(999999999999)
 
         # Manual controls
         pressed = pygame.key.get_pressed()
@@ -235,8 +197,8 @@ def runGame(death_count,font):
     death_count += 1
     runGame(death_count,font)
 
-# data,labels = load_csv("Data.csv",target_column=0,categorical_labels=True,n_classes=3)
-# model = getTrainedModel(data,labels)
+data,labels = load_csv("Data.csv",target_column=0,categorical_labels=True,n_classes=2)
+model = getTrainedModel(data,labels)
 death_count = 0
 pygame.init()
 font = pygame.font.SysFont("monospace", 50)
