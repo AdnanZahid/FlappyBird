@@ -83,7 +83,7 @@ def neuralInputs(flappy_bird_nodes,wall_boundary_x,top_wall_boundary_y,bottom_wa
     return wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y
 
 def getTrainedModel(data, labels):
-    network = input_data(shape=[None, 2], name='input')
+    network = input_data(shape=[None, 3], name='input')
     network = fully_connected(network, 3, activation='linear')
     network = regression(network, optimizer='adam', learning_rate=1e-2, loss='mean_square', name='target')
     model = tflearn.DNN(network)
@@ -98,18 +98,26 @@ def getPredictedDirection(flappy_bird_nodes,model,inputs):
 
     # shuffle(directions)
 
+    no_match_found = False
     for direction in directions:
-        prediction = model.predict([[inputs[0],direction]])
-
+        prediction = model.predict([[inputs[1],inputs[2],direction]])
         if np.argmax(prediction) == 1:
             break
+        no_match_found = True
+
+    if no_match_found == True:
+        for direction in directions:
+            prediction = model.predict([[inputs[1],inputs[2],direction]])
+            if np.argmax(prediction) == 0:
+                break
 
     return direction
 
 def getOutputForTraining(target_output,inputs,direction):
 
-    return "\n{},{},{}".format(target_output,
-                                        inputs[0],
+    return "\n{},{},{},{}".format(target_output,
+                                        inputs[1],
+                                        inputs[2],
                                         direction)
 
 def getWalledGrid(grid,index):
