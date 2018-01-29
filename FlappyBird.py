@@ -3,9 +3,9 @@ import pygame
 from random import randint,shuffle
 import numpy as np
 from math import pi, asin, sqrt
-import tflearn
-from tflearn.layers.core import input_data, fully_connected
-from tflearn.layers.estimator import regression
+import pandas as pds
+from keras.models import Sequential
+from keras.layers import Dense
 
 # Load CSV file, indicate that the first column represents labels
 from tflearn.data_utils import load_csv
@@ -83,12 +83,16 @@ def neuralInputs(flappy_bird_nodes,wall_boundary_x,top_wall_boundary_y,bottom_wa
     return wall_boundary_x,top_wall_boundary_y,bottom_wall_boundary_y
 
 def getTrainedModel(data, labels):
-    network = input_data(shape=[None, 3], name='input')
-    network = fully_connected(network, 3, activation='linear')
-    network = regression(network, optimizer='adam', learning_rate=1e-2, loss='mean_square', name='target')
-    model = tflearn.DNN(network)
-
-    model.fit(data, labels, n_epoch = 1, shuffle = True)
+    
+    model = Sequential()
+    model.add(Dense(5,input_shape=(3,),activation="relu"))
+    model.add(Dense(25,activation="relu"))
+    model.add(Dense(25,activation="relu"))
+    model.add(Dense(1,activation="linear"))
+    model.summary()
+    model.compile(loss="mean_squared_error",optimizer="adam",metrics=["accuracy"])
+    model.fit(data,labels,epochs=1)
+    
     return model
 
 def getPredictedDirection(flappy_bird_nodes,model,inputs):
@@ -100,16 +104,17 @@ def getPredictedDirection(flappy_bird_nodes,model,inputs):
 
     no_match_found = False
     for direction in directions:
-        prediction = model.predict([[inputs[1],inputs[2],direction]])
-        if np.argmax(prediction) == 1:
+        prediction = model.predict(np.array([[inputs[1],inputs[2],direction]]))
+        print(prediction)
+        if prediction > 0.7:
             break
         no_match_found = True
 
-    if no_match_found == True:
-        for direction in directions:
-            prediction = model.predict([[inputs[1],inputs[2],direction]])
-            if np.argmax(prediction) == 0:
-                break
+    # if no_match_found == True:
+    #     for direction in directions:
+    #         prediction = model.predict(np.array([[inputs[1],inputs[2],direction]]))
+    #         if prediction >= 0:
+    #             break
 
     return direction
 
@@ -167,6 +172,7 @@ def runGame(death_count,font):
         # Move the wall
         wallIndex -= 1
         if wallIndex <= 0:
+            score_count += 1
             wallIndex = columns
 
         # If game is over, target output is -1
@@ -205,7 +211,8 @@ def runGame(death_count,font):
     death_count += 1
     runGame(death_count,font)
 
-data,labels = load_csv("Data.csv",target_column=0,categorical_labels=True,n_classes=3)
+data = pds.read_csv("Data.csv",usecols=[1,2,3])
+labels = pds.read_csv("Data.csv",usecols=[0])
 model = getTrainedModel(data,labels)
 death_count = 0
 pygame.init()
